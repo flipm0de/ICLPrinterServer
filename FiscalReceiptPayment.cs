@@ -15,17 +15,16 @@ namespace ICLPrinterServer
             Total = -amount;
         }
 
-        public void Print(int charsPerLine)
+        public void Print (int charsPerLine)
         {
             var value = Amount + "  ";
             Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine(GetPaymentType().PadRight(charsPerLine - value.Length) + value);
+            Console.WriteLine (GetPaymentType ().PadRight (charsPerLine - value.Length) + value);
         }
 
-        private string GetPaymentType()
+        private string GetPaymentType ()
         {
-            switch (PaymentTypeId)
-            {
+            switch (PaymentTypeId) {
                 case 1:
                     return "КРЕДИТНА/ДЕБИТНА КАРТА";
 

@@ -6,15 +6,15 @@ namespace ICLPrinterServer
     {
         public string Text { get; }
 
-        public FiscalReceiptText(string text)
+        public FiscalReceiptText (string text)
         {
             Text = text;
         }
 
-        public virtual void Print(int charsPerLine)
+        public virtual void Print (int charsPerLine)
         {
             Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine(Text);
+            Console.WriteLine (Text);
         }
     }
 }

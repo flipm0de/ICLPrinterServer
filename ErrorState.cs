@@ -146,9 +146,9 @@ namespace ICLPrinterServer
 
         public ErrorState ()
         {
-            informations.Add(FiscalMemIsFormatted);
-            informations.Add(FiscalMode);
-            informations.Add(NewProtocolUsed);
+            informations.Add (FiscalMemIsFormatted);
+            informations.Add (FiscalMode);
+            informations.Add (NewProtocolUsed);
         }
 
         public ErrorState (string error)
@@ -157,9 +157,9 @@ namespace ICLPrinterServer
             Set (error);
         }
 
-        public ErrorState Set(string error)
+        public ErrorState Set (string error)
         {
-            informations.Add(error);
+            informations.Add (error);
 
             return this;
         }

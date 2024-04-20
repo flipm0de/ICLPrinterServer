@@ -4,7 +4,7 @@
     {
         private static void Main (string [] args)
         {
-            new PrinterServer(4999).Run();
+            new PrinterServer (4999).Run ();
         }
     }
 }
