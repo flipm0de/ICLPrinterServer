@@ -22,6 +22,7 @@ namespace ICLPrinterServer
             Console.WriteLine ($"Listening on port {PORT_NUMBER}");
             Console.CancelKeyPress += (sender, e) =>
                 {
+                    Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine ("Ctrl+C pressed, stopping the listener...");
                     cts.Cancel ();
                     e.Cancel = true; // Prevent the application from terminating immediately
@@ -33,11 +34,15 @@ namespace ICLPrinterServer
                     new PrinterServer (client).Run ();
                 }
             } catch (OperationCanceledException) {
+                Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine ("Operation cancelled.");
             } finally {
                 listener.Stop ();
+                Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine ("Listener stopped.");
             }
+
+            Console.ReadKey ();
         }
     }
 }

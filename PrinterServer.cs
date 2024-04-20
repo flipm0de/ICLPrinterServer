@@ -55,7 +55,6 @@ namespace ICLPrinterServer
             stream.ReadTimeout = 100;
             var lastDataReceived = DateTime.Now;
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.BackgroundColor = ConsoleColor.Black;
             Console.WriteLine ("Accepted connection...");
             Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.WriteLine ();
@@ -81,7 +80,6 @@ namespace ICLPrinterServer
                     if (!client.Connected) {
                         client.Dispose ();
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.BackgroundColor = ConsoleColor.Black;
                         Console.WriteLine ("Disconnected.");
                         return;
                     }
@@ -145,7 +143,6 @@ namespace ICLPrinterServer
                     commandBuffer.Clear ();
                 } catch (IOException e) {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.BackgroundColor = ConsoleColor.Black;
                     Console.WriteLine ("IOException: " + e.Message);
                 }
             }
