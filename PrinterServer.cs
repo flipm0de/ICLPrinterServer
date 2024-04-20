@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -24,6 +23,7 @@ namespace ICLPrinterServer
         private const byte TAB = 0x09;
         private const char TAB_C = '\t';
 
+        private readonly TcpClient client;
         private readonly int charsPerLine = 48;
         private readonly int port;
         private readonly string deviceName = "Vladster virtual test printer";
@@ -43,118 +43,110 @@ namespace ICLPrinterServer
         private int fiscalReceiptCounter;
         private string [] fiscalHeader = new [] { "Тестова Компания ООД", "София, бул. Цар Борис III", "ЕИК: 111222333", "Магазин \"Центъра\"", "София, бул. Цар Борис III", "ЗДДС № BG111222333" };
 
-        public PrinterServer (int port)
+        public PrinterServer (TcpClient client)
         {
-            this.port = port;
+            this.client = client;
             currentErrorState = new ErrorState ();
         }
 
         public void Run ()
         {
-            var buffer = new byte [1024];
+            var stream = client.GetStream ();
+            stream.ReadTimeout = 100;
+            var lastDataReceived = DateTime.Now;
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.BackgroundColor = ConsoleColor.Black;
+            Console.WriteLine ("Accepted connection...");
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine ();
 
-            var listener = new TcpListener (IPAddress.Any, port);
-            listener.Start ();
-            Console.WriteLine ("Listening on port {0}", port);
+            var commandBuffer = new List<byte> ();
+            var commandReady = false;
 
             while (true) {
-                var client = listener.AcceptTcpClient ();
-                var stream = client.GetStream ();
-                stream.ReadTimeout = 100;
-                var lastDataReceived = DateTime.Now;
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.BackgroundColor = ConsoleColor.Black;
-                Console.WriteLine ("Accepted connection...");
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine ();
+                var buffer = new byte [1024];
+                int received;
+                try {
+                    received = stream.Read (buffer, 0, buffer.Length);
+                } catch (Exception) {
+                    received = 0;
+                }
 
-                var commandBuffer = new List<byte> ();
-                var commandReady = false;
-
-                while (true) {
-                    var received = 0;
-                    try {
-                        received = stream.Read (buffer, 0, buffer.Length);
-                    } catch (Exception ex) {
-                        received = 0;
+                if (received == 0) {
+                    if (lastDataReceived.AddSeconds (20) < DateTime.Now) {
+                        stream.Dispose ();
+                        client.Close ();
                     }
 
-                    if (received == 0) {
-                        if (lastDataReceived.AddSeconds (20) < DateTime.Now) {
-                            stream.Dispose ();
-                            client.Close ();
-                        }
-
-                        if (!client.Connected) {
-                            client.Dispose ();
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            Console.BackgroundColor = ConsoleColor.Black;
-                            Console.WriteLine ("Disconnected.");
-                            break;
-                        }
-
-                        Thread.Sleep (500);
-                        continue;
-                    }
-
-                    lastDataReceived = DateTime.Now;
-
-                    int i;
-                    for (i = 0; i < received; i++) {
-                        var inByte = buffer [i];
-                        if (inByte == MARKER_ACK)
-                            continue;
-
-                        if (commandBuffer.Count != 0 ||
-                            inByte == MARKER_START)
-                            commandBuffer.Add (inByte);
-
-                        if (inByte == MARKER_END) {
-                            commandReady = true;
-                            break;
-                        }
-                    }
-
-                    if (!commandReady)
-                        continue;
-
-                    int len = (commandBuffer [1] - '0') << 0xC;
-                    len += (commandBuffer [2] - '0') << 0x8;
-                    len += (commandBuffer [3] - '0') << 0x4;
-                    len += (commandBuffer [4] - '0');
-
-                    currentSequence = commandBuffer [5];
-
-                    int value = (commandBuffer [6] - '0') << 0xC;
-                    value += (commandBuffer [7] - '0') << 0x8;
-                    value += (commandBuffer [8] - '0') << 0x4;
-                    value += (commandBuffer [9] - '0');
-                    var command = (CommandCodes) value;
-
-                    var argsBuffer = new List<byte> ();
-                    i = 10;
-                    for (; i < commandBuffer.Count; i++) {
-                        if (commandBuffer [i] == MARKER_ARGS_END)
-                            break;
-
-                        argsBuffer.Add (commandBuffer [i]);
-                    }
-
-                    int crc = (commandBuffer [i + 1] - '0') << 0xC;
-                    crc += (commandBuffer [i + 2] - '0') << 0x8;
-                    crc += (commandBuffer [i + 3] - '0') << 0x4;
-                    crc += (commandBuffer [i + 4] - '0');
-
-                    try {
-                        ProcessCommand (stream, command, argsBuffer.ToArray ());
-
-                        commandReady = false;
-                        commandBuffer.Clear ();
-                    } catch (IOException e) {
+                    if (!client.Connected) {
+                        client.Dispose ();
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.BackgroundColor = ConsoleColor.Black;
-                        Console.WriteLine ("IOException: " + e.Message);
+                        Console.WriteLine ("Disconnected.");
+                        return;
                     }
+
+                    Thread.Sleep (500);
+                    continue;
+                }
+
+                lastDataReceived = DateTime.Now;
+
+                int i;
+                for (i = 0; i < received; i++) {
+                    var inByte = buffer [i];
+                    if (inByte == MARKER_ACK)
+                        continue;
+
+                    if (commandBuffer.Count != 0 ||
+                        inByte == MARKER_START)
+                        commandBuffer.Add (inByte);
+
+                    if (inByte == MARKER_END) {
+                        commandReady = true;
+                        break;
+                    }
+                }
+
+                if (!commandReady)
+                    continue;
+
+                int len = (commandBuffer [1] - '0') << 0xC;
+                len += (commandBuffer [2] - '0') << 0x8;
+                len += (commandBuffer [3] - '0') << 0x4;
+                len += (commandBuffer [4] - '0');
+
+                currentSequence = commandBuffer [5];
+
+                int value = (commandBuffer [6] - '0') << 0xC;
+                value += (commandBuffer [7] - '0') << 0x8;
+                value += (commandBuffer [8] - '0') << 0x4;
+                value += (commandBuffer [9] - '0');
+                var command = (CommandCodes) value;
+
+                var argsBuffer = new List<byte> ();
+                i = 10;
+                for (; i < commandBuffer.Count; i++) {
+                    if (commandBuffer [i] == MARKER_ARGS_END)
+                        break;
+
+                    argsBuffer.Add (commandBuffer [i]);
+                }
+
+                int crc = (commandBuffer [i + 1] - '0') << 0xC;
+                crc += (commandBuffer [i + 2] - '0') << 0x8;
+                crc += (commandBuffer [i + 3] - '0') << 0x4;
+                crc += (commandBuffer [i + 4] - '0');
+
+                try {
+                    ProcessCommand (stream, command, argsBuffer.ToArray ());
+
+                    commandReady = false;
+                    commandBuffer.Clear ();
+                } catch (IOException e) {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.BackgroundColor = ConsoleColor.Black;
+                    Console.WriteLine ("IOException: " + e.Message);
                 }
             }
         }
