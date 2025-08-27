@@ -31,7 +31,16 @@ namespace ICLPrinterServer
             try {
                 while (!cts.IsCancellationRequested) {
                     var client = await listener.AcceptTcpClientAsync (cts.Token);
-                    new PrinterServer (client).Run ();
+                    // Run each client connection asynchronously so we can accept new connections
+                    _ = Task.Run (() => {
+                        try {
+                            new PrinterServer (client).Run ();
+                        } catch (Exception ex) {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine ($"Error handling client: {ex.Message}");
+                            Console.ResetColor ();
+                        }
+                    });
                 }
             } catch (OperationCanceledException) {
                 Console.ForegroundColor = ConsoleColor.Red;
@@ -41,8 +50,6 @@ namespace ICLPrinterServer
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine ("Listener stopped.");
             }
-
-            Console.ReadKey ();
         }
     }
 }
