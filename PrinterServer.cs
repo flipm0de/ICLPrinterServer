@@ -48,44 +48,61 @@ namespace ICLPrinterServer
         {
             this.client = client;
             currentErrorState = new ErrorState ();
+            
+            client.Client.SetSocketOption (SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
         }
 
         public void Run ()
         {
             var stream = client.GetStream ();
-            stream.ReadTimeout = 100;
+            stream.ReadTimeout = 1000; // 1 second timeout for reads
+            client.NoDelay = true; // Disable Nagle for better responsiveness
+            
             var lastDataReceived = DateTime.Now;
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine ("Accepted connection...");
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine ();
+            Console.WriteLine ($"Accepted connection from {client.Client.RemoteEndPoint}");
+            Console.ResetColor ();
 
             var commandBuffer = new List<byte> ();
             var commandReady = false;
 
             while (true) {
                 var buffer = new byte [1024];
-                int received;
+                int received = 0;
+                
                 try {
                     received = stream.Read (buffer, 0, buffer.Length);
-                } catch (Exception) {
+                } catch (IOException ioEx) when (ioEx.InnerException is SocketException socketEx && socketEx.SocketErrorCode == SocketError.TimedOut) {
+                    // Read timeout is normal - just means no data available
                     received = 0;
+                } catch (IOException ioEx) {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine ($"IO Exception: {ioEx.Message}");
+                    Console.ResetColor ();
+                    break; // Exit loop on real IO errors
+                } catch (Exception ex) {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine ($"Unexpected Exception: {ex.GetType().Name} - {ex.Message}");
+                    Console.ResetColor ();
+                    break; // Exit loop on unexpected errors
                 }
 
                 if (received == 0) {
                     if (lastDataReceived.AddSeconds (20) < DateTime.Now) {
-                        stream.Dispose ();
-                        client.Close ();
-                    }
-
-                    if (!client.Connected) {
-                        client.Dispose ();
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine ("Disconnected.");
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine ($"Idle timeout reached for {client.Client.RemoteEndPoint}");
+                        Console.ResetColor ();
                         return;
                     }
 
-                    Thread.Sleep (500);
+                    if (!client.Connected) {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine ("Disconnected.");
+                        Console.ResetColor ();
+                        return;
+                    }
+
+                    // No sleep needed - Read() already blocks with timeout
                     continue;
                 }
 
@@ -145,6 +162,7 @@ namespace ICLPrinterServer
                 } catch (IOException e) {
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine ("IOException: " + e.Message);
+                    Console.ResetColor ();
                 }
             }
         }
@@ -244,10 +262,10 @@ namespace ICLPrinterServer
                     }
 
                     fiscalReceipt = new FiscalReceipt
-                    {
-                        Header = fiscalHeader.Select (value => value.PadLeft ((charsPerLine - value.Length) / 2 + value.Length)).ToArray (),
-                        Number = ++fiscalReceiptCounter
-                    };
+                        {
+                            Header = fiscalHeader.Select (value => value.PadLeft ((charsPerLine - value.Length) / 2 + value.Length)).ToArray (),
+                            Number = ++fiscalReceiptCounter
+                        };
                     if (strings.Length > 4 && Regex.IsMatch (strings [2], @"^\w{8}-\w{4}-\d{7}$"))
                         fiscalReceipt.USN = strings [2];
 
@@ -273,14 +291,14 @@ namespace ICLPrinterServer
                     }
 
                     fiscalReceipt = new FiscalReceipt
-                    {
-                        ReceiptType = strings [3] == "0" ? FiscalReceiptType.Annulment : FiscalReceiptType.Return,
-                        Header = fiscalHeader.Select (value => value.PadLeft ((charsPerLine - value.Length) / 2 + value.Length)).ToArray (),
-                        Number = ++fiscalReceiptCounter,
-                        SourceDocumentNumber = strings [4],
-                        SourceDocumentDateTime = DateTime.TryParseExact (strings [5], "dd-MM-yy HH:mm:ss", null, DateTimeStyles.AssumeLocal, out var dateTime) ? dateTime : DateTime.Now,
-                        SourceFiscalMemory = strings [6]
-                    };
+                        {
+                            ReceiptType = strings [3] == "0" ? FiscalReceiptType.Annulment : FiscalReceiptType.Return,
+                            Header = fiscalHeader.Select (value => value.PadLeft ((charsPerLine - value.Length) / 2 + value.Length)).ToArray (),
+                            Number = ++fiscalReceiptCounter,
+                            SourceDocumentNumber = strings [4],
+                            SourceDocumentDateTime = DateTime.TryParseExact (strings [5], "dd-MM-yy HH:mm:ss", null, DateTimeStyles.AssumeLocal, out var dateTime) ? dateTime : DateTime.Now,
+                            SourceFiscalMemory = strings [6]
+                        };
                     if (strings.Length > 10 && Regex.IsMatch (strings [10], @"^\w{8}-\w{4}-\d{7}$"))
                         fiscalReceipt.USN = strings [10];
 
@@ -447,10 +465,10 @@ namespace ICLPrinterServer
                     }
 
                     nonFiscalReceipt = new NonFiscalReceipt
-                    {
-                        Header = fiscalHeader.Select (value => value.PadLeft ((charsPerLine - value.Length) / 2 + value.Length)).ToArray (),
-                        Number = ++fiscalReceiptCounter
-                    };
+                        {
+                            Header = fiscalHeader.Select (value => value.PadLeft ((charsPerLine - value.Length) / 2 + value.Length)).ToArray (),
+                            Number = ++fiscalReceiptCounter
+                        };
 
                     nonFiscalReceipt.PrintHeader ();
                     message = PackMessage ((int) command, 0, TAB);
