@@ -37,6 +37,7 @@ namespace ICLPrinterServer
         private Encoding encoding = Encoding.GetEncoding (1251);
         private ErrorState currentErrorState;
         private byte currentSequence;
+        private FiscalReceipt lastFiscalReceipt;
         private FiscalReceipt fiscalReceipt;
         private NonFiscalReceipt nonFiscalReceipt;
         private int nonFiscalReceiptCounter;
@@ -155,6 +156,7 @@ namespace ICLPrinterServer
             string [] strings;
             string text;
             FiscalReceiptText fiscalReceiptText;
+            int itemsCount;
             switch (command) {
                 case CommandCodes.GetStatus:
                     message = PackMessage ((int) command);
@@ -382,12 +384,13 @@ namespace ICLPrinterServer
                         return;
                     }
 
-                    var itemsCount = fiscalReceipt.Details.Count (d => d is FiscalReceiptItem);
+                    itemsCount = fiscalReceipt.Details.Count (d => d is FiscalReceiptItem);
                     PrintKeyValuePair (fiscalReceipt.Number.ToString ().PadLeft (7, '0'), itemsCount.ToString (CultureInfo.InvariantCulture) + " " + (itemsCount > 1 ? "АРТИКУЛА" : "АРТИКУЛ"));
                     PrintCentered ("ДАТА " + fiscalReceipt.TimeStamp.ToString ("dd.MM.yyyy") + "  ЧАС " + fiscalReceipt.TimeStamp.ToString ("HH:mm:ss"));
                     Console.ForegroundColor = ConsoleColor.White;
                     PrintCentered ("ФИСКАЛЕН БОН");
                     PrintKeyValuePair (deviceSerialNumber, fiscalMemoryNumber);
+                    lastFiscalReceipt = fiscalReceipt;
                     fiscalReceipt = null;
 
                     Console.ForegroundColor = ConsoleColor.DarkRed;
@@ -398,6 +401,42 @@ namespace ICLPrinterServer
                     args.Add (TAB);
 
                     message = PackMessage ((int) command, args.ToArray ());
+                    stream.Write (message, 0, message.Length);
+                    return;
+
+                case CommandCodes.PrintDuplicate:
+                    if (lastFiscalReceipt == null) {
+                        ReturnError (stream, command, ErrorState.GeneralError);
+                        return;
+                    }
+
+                    Console.WriteLine ();
+
+                    lastFiscalReceipt.PrintHeader (charsPerLine);
+                    Console.ForegroundColor = ConsoleColor.White;
+                    PrintCentered ("ДУБЛИКАТ");
+                    Console.ResetColor ();
+                    Console.WriteLine ();
+
+                    lastFiscalReceipt.TotalIsPrinted = false;
+                    foreach (var line in lastFiscalReceipt.Details) {
+                        if (line is FiscalReceiptPayment)
+                            lastFiscalReceipt.PrintTotal (charsPerLine);
+
+                        line.Print (charsPerLine);
+                    }
+
+                    itemsCount = lastFiscalReceipt.Details.Count (d => d is FiscalReceiptItem);
+                    PrintKeyValuePair (lastFiscalReceipt.Number.ToString ().PadLeft (7, '0'), itemsCount.ToString (CultureInfo.InvariantCulture) + " " + (itemsCount > 1 ? "АРТИКУЛА" : "АРТИКУЛ"));
+                    PrintCentered ("ДАТА " + lastFiscalReceipt.TimeStamp.ToString ("dd.MM.yyyy") + "  ЧАС " + lastFiscalReceipt.TimeStamp.ToString ("HH:mm:ss"));
+                    Console.ForegroundColor = ConsoleColor.White;
+                    PrintCentered ("ФИСКАЛЕН БОН");
+                    PrintKeyValuePair (deviceSerialNumber, fiscalMemoryNumber);
+
+                    Console.ForegroundColor = ConsoleColor.DarkRed;
+                    PrintCentered ("<cut>", '-');
+
+                    message = PackMessage ((int) command, 0, TAB);
                     stream.Write (message, 0, message.Length);
                     return;
 

@@ -15,7 +15,7 @@ namespace ICLPrinterServer
             Total = -amount;
         }
 
-        public void Print (int charsPerLine)
+        public override void Print (int charsPerLine)
         {
             var value = Amount + "  ";
             Console.ForegroundColor = ConsoleColor.DarkGray;

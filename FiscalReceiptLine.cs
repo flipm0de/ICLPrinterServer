@@ -3,5 +3,7 @@
     public abstract class FiscalReceiptLine
     {
         public decimal Total { get; set; }
+
+        public abstract void Print (int charsPerLine);
     }
 }

@@ -11,7 +11,7 @@ namespace ICLPrinterServer
             Text = text;
         }
 
-        public virtual void Print (int charsPerLine)
+        public override void Print (int charsPerLine)
         {
             Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.WriteLine (Text);

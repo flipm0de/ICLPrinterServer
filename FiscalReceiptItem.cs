@@ -29,7 +29,7 @@ namespace ICLPrinterServer
             Total = Math.Round ((Price + Math.Round (Price * extraPercent / 100, 2)) * Quantity, 2);
         }
 
-        public virtual void Print (int charsPerLine)
+        public override void Print (int charsPerLine)
         {
             Console.ForegroundColor = ConsoleColor.DarkGray;
 
