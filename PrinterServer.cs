@@ -481,7 +481,8 @@ namespace ICLPrinterServer
                         return;
                     }
 
-                    text = encoding.GetString (commandArgs);
+                    strings = encoding.GetString (commandArgs).Split (TAB_C);
+                    text = strings [0];
                     if (text.Length > charsPerLine - 2)
                         text = text.Substring (0, charsPerLine - 2);
                     else if (text.Length < charsPerLine - 2)
